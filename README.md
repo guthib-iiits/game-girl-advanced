@@ -1,185 +1,203 @@
 # game-girl-advanced
 irony is that it is more basic than the game-girl we built earlier but anyway , enjoy
 
-## Code walkthrough: lighting the matrix, line by line
 
-This is the 8051 program that lit the whole screen blue. Every line is explained. Read it once top to bottom, then use it as a template.
 
-### The chain of command (big picture)
+GAME GIRL ADVANCED! GAME GIRL ADVANCED! ゲームガール・アドバンスド ! ゲームガール・アドバンスド ! <mark>J</mark> ~~<u><mark>sfe —</mark></u>~~ Group 9 Microprocessors and Microcontrollers M2026 <mark>-</mark> Group 9 Microprocessors and Microcontrollers M2026 
 
-```
- your game code
-    |  decides which pixels are lit, counts them (N)
-    v
- pkt_start(N) --> pkt_pixel(x, y, colour) x N --> pkt_end()
-    |  each call sends bytes out of the 8051 through tx()
-    v
- UART wire (P3.1 TXD, 57600 baud)
-    v
- ESP8266 feed() state machine: wait AA -> read N -> read pairs -> checksum -> end 55
-    v
- applyPacket() -> frameBuf[] (one colour per pixel) -> render() -> matrix.show()
-    v
- 128 WS2812 LEDs light up
-```
+## TABLE OF CONTENTS TABLE OF CONTENTS 
 
-Example: pixel (0, 0) green and pixel (7, 15) red. That is N = 2 and these bytes on the wire:
+01 Intro Information about the project and team member contributions 
 
-| Byte | Meaning |
-|---|---|
-| `AA` | Start marker |
-| `02` | N = 2 pixels |
-| `00 02` | pos 0 (y*8+x = 0), colour 2 (green) |
-| `7F 01` | pos 127 (15*8+7), colour 1 (red) |
-| `7E` | Checksum: 02 xor 00 xor 02 xor 7F xor 01 |
-| `55` | End marker |
+03 Software Code , Debugging and error explanation . Boot up Process 
 
-That is 8 bytes, about 1.4 ms at 57600 baud.
+02 Hardware All of the components used and their description 
 
-### The code, every line explained
+## 04 
 
-```c
-#include <8051.h>      // names for the 8051's special registers: SBUF, TI, TMOD, TH1, ...
-#include <stdint.h>    // fixed-size types: uint8_t = 1 byte (0..255)
+Hurdles ADC Interfacing , Display timing , Yaw and Drift. Timing errors 
 
-static uint8_t cs;     // running checksum. "static" = private to this file; lives in RAM all the time
+<mark>0</mark> ~~<mark>1</mark>~~ <mark>0</mark> ~~<mark>1</mark>~~ 
 
-void uart_init(void)               // sets up the serial port. Call once at start
-{
-    TMOD &= 0x0F;                  // clear the Timer 1 half of TMOD, keep the Timer 0 half untouched
-    TMOD |= 0x20;                  // Timer 1 in mode 2: 8-bit counter that reloads itself
-    TH1 = 0xFF;                    // reload value 255. Counting only 1 step gives the fastest baud
-    TL1 = 0xFF;                    // starting value, so the first tick is immediate
-    PCON |= 0x80;                  // SMOD = 1: doubles the baud rate. Now 11.0592 MHz gives exactly 57600
-    TR1 = 1;                       // start Timer 1 (it is the baud-rate clock)
-    SCON = 0x50;                   // serial mode 1 (8-bit UART, variable baud) with receive enabled
-}
+Int <mark>roductio</mark> n Int <mark>roductio</mark> n 
 
-void tx(uint8_t b)                 // send ONE byte out of the TX pin
-{
-    SBUF = b;                      // writing to SBUF starts the hardware sending
-    while (!TI);                   // wait until TI (transmit-done flag) becomes 1. About 174 us per byte
-    TI = 0;                        // clear the flag, ready for the next byte
-}
+Project Details and Team Members Project Details and Team Members 
 
-void txc(uint8_t b)                // send one byte AND include it in the checksum
-{
-    cs ^= b;                       // xor the byte into the running checksum
-    tx(b);                         // then send it
-}
 
-void pkt_start(uint8_t n)          // begin a packet that will hold n pixels
-{
-    tx(0xAA);                      // start marker. Not part of the checksum
-    cs = 0;                        // reset the checksum for this packet
-    txc(n);                        // send the pixel count (and add it to the checksum)
-}
 
-void pkt_pixel(uint8_t x, uint8_t y, uint8_t colour)   // add one pixel to the packet
-{
-    txc((uint8_t)((y << 3) | x));  // position = y*8 + x. "y << 3" is y*8; x is 0..7 so "|" just adds it
-    txc(colour);                   // colour index 0..9 (see the palette table)
-}
+## Introduction Introduction 
 
-void pkt_end(void)                 // finish the packet
-{
-    tx(cs);                        // send the checksum so the ESP8266 can detect damaged packets
-    tx(0x55);                      // end marker
-}
 
-void delay_ms(unsigned int ms)     // rough delay. Not exact: measure it if timing matters
-{
-    unsigned int i, j;
-    for (i = 0; i < ms; i++)       // repeat once per millisecond
-        for (j = 0; j < 120; j++); // empty loop that wastes about 1 ms at 11.0592 MHz
-}
 
-void main(void)
-{
-    uint8_t x, y;                  // loop counters for column and row
-    uart_init();                   // 1) set up the serial port
-    while (1)                      // 2) repeat forever: one pass = one frame
-    {
-        pkt_start(8 * 16);         //    we will send 128 pixels, so N = 128
-        for (x = 0; x < 8; x++)            // every column...
-            for (y = 0; y < 16; y++)       // ...and every row
-                pkt_pixel(x, y, 3);        // pixel (x, y) in colour 3 = blue
-        pkt_end();                 //    checksum + end marker
-        delay_ms(100);             //    wait before the next frame
-    }
-}
-```
+# The Game Girl Advanced is a Game Arcade based on the Classic 8051 Microcontroller (AT89S52 ) . It can run Three Games - Snake Xenia ( Rishitha) - Space Commander (Sripathy) - Tetris (Venkat) We made this so that we can play games on the easiest hardware available to use. Shown are the previews of game rendered in Figma built to scale. Snake Xenia Space Commander TETRIS | ~~<u><mark>Re</mark></u>~~ 
 
-### Rules the protocol depends on
+## TEAM Members TEAM Members 
 
-1. **N must equal the number of `pkt_pixel()` calls** between `pkt_start()` and `pkt_end()`. A wrong N means the ESP8266 never accepts the packet.
-2. x must be 0..7, y must be 0..15, colour must be 0..9. Anything else is rejected.
-3. Do not write `;` at the end of a `#define` colour (`#define RED 1;` breaks the code).
-4. Send exactly one packet per frame. The ESP8266 redraws the whole screen once per packet.
-5. Keep the lit pixels few. At 57600 baud a packet takes about 174 us per byte, so 100 lit pixels is about 35 ms.
+Rishitha Group Leader and Principal Engineer Programmed Snake Xenia S20240020325 
 
-### How to build your game on top of it
+Sripathy Hardware and Software Engineer Programmed Space Commander S20240020332 
 
-Every game uses the same loop. You only write `read_input()`, `game_update()` and `game_draw()`:
+Venkat Structural Integrity Engineer Programmed Tetris S20240020314 
 
-```c
-void main(void)
-{
-    uart_init();
-    TMOD |= 0x01;          // Timer 0 free-running: TL0 changes constantly, use it as a random number
-    TR0 = 1;
-    game_init();           // set the starting positions and score
-    while (1)
-    {
-        read_input();      // joystick (fake it with a counter until the ADC driver exists)
-        game_update();     // move things, check collisions, change the score
-        game_draw();       // send the packet (below)
-        delay_ms(100);     // frame pacing: bigger = slower game
-    }
-}
-```
+<mark>0</mark> ~~<mark>2</mark>~~ <mark>0</mark> ~~<mark>2</mark>~~ 
 
-**Smallest possible example: a dot that sweeps across the screen.**
+H <mark>ardware</mark> H <mark>ardware</mark> 
 
-```c
-static uint8_t px = 0, py = 0;
+Component Selection and Working Component Selection and Working 
 
-void game_update(void)
-{
-    px++;                              // move right
-    if (px > 7) { px = 0; py = (py + 1) & 15; }   // wrap to the next row, and back to the top after row 15
-}
+Microcontrollers Microcontrollers ~~<u><mark>FY</mark></u>~~ <mark>| Ss SE</mark> ~~<mark>Ee</mark>~~ ~~<u><mark>s</mark></u>~~ <u><mark>e</mark></u> 1 ae <mark>"|</mark> Beet fae ee!74 | <mark>ete:I S</mark> S Deeos “s Buy eee,URS Oe45°. SS ED2 So Ca? S one Cass NE come @, AT89S52 ESP8266 
 
-void game_draw(void)
-{
-    pkt_start(1);                      // one pixel, so N = 1
-    pkt_pixel(px, py, 3);              // draw it in blue
-    pkt_end();
-}
-```
+ESP8266 The Display Driver which has a 26MHz clock , which is necessary for the WS2812B Matrix display. It also houses the EEPROM , which stores the high scores. 
 
-**A Snake-style draw function.** Count first, then send:
+The main controller,which interfaces the ADC,Joystick and computes all the required data to be sent to the Display Driver. 
 
-```c
-void game_draw(void)
-{
-    uint8_t i;
-    pkt_start(snake_len + 1);                          // N = snake body cells + 1 food
-    for (i = 0; i < snake_len; i++)
-        pkt_pixel(snake_x[i], snake_y[i], i == 0 ? 6 : 5);   // head light blue, body dark blue
-    pkt_pixel(food_x, food_y, 1);                      // food red
-    pkt_end();
-}
-```
 
-Only the **lit** pixels go into the packet. With sparse-frame mode on (see above), everything you do not send is off, so you never have to "erase" a pixel: if a pixel is no longer in the list, it goes dark on the next frame.
 
-### If it does not work
+<!-- Start of picture text -->
+ia] ooo"<br>ow S|<br><!-- End of picture text -->
 
-| What you see | Likely cause |
-|---|---|
-| Nothing lights, ESP8266 onboard LED stays on solid | N does not match the number of pixels, or the baud rates differ |
-| Nothing lights, onboard LED never turns on | Wire from 8051 TX not reaching D7, ground not shared, or the program is not running |
-| Random wrong colours | Check the `#define` colour numbers and that you reflashed both chips |
-| Rows look swapped or mirrored | The `SERPENTINE` setting in the ESP8266 code |
-| ESP8266 restarts, a white dot sweeps again | Power or wiring problem (see Known issues) |
+Peripherals PIG ~~<u><mark>FY</mark></u>~~ Peripherals | <mark>Dl ———</mark> |! <mark>| i ee</mark> | <mark>ee La i= |</mark> 1 aeae <mark>eeeee</mark> . « Joystick WS2812B aeae <mark>eeeee</mark> Ney fig eaeeeeee SANS, aeeeeeee oY Human Interface Device 128 pixel Full Colour Pee for playing the game Gamma Corrected display peaeeaass BESEEEES oe Baeeeees PS‘ CORN * ADC0809 Been."aN <mark>‘Ss.</mark> a ASP8051 Poaeceagryre<sup>$3344.</sup> pero as r ae °° <mark>aS.</mark> SEEREEEe Y * Analog to Digital Converter he > o sd Programmer and Power cry 2 + Ses ai bball «3 for both X and Y Channel <6) = Delivery for the 8051 dS oh Rad 
+
+ASP8051 Programmer and Power Delivery for the 8051 
+
+
+
+
+
+Block Diagram Block Diagram ~~<u><mark>Lo</mark></u>~~ i | <mark>Da</mark> ee <mark>ee a iEE</mark> .7 a — <mark>—</mark> — <mark>— o</mark> se <i es ¢ > ISP Joystick ADC0809 Gives power from the ADC takes two channels User Analog Input to wall and programs the input and gives out the 8 control the Game 8051 bit Digital Equivalent 
+
+Joystick ADC0809 ADC takes two channels User Analog Input to input and gives out the 8 control the Game bit Digital Equivalent 
+
+
+
+<!-- Start of picture text -->
+Burret<br><!-- End of picture text -->
+
+
+
+<!-- Start of picture text -->
+eoeecess)<br><!-- End of picture text -->
+
+WS2 <mark>812</mark> B 2X64bit Cascaded LED Matrix display that supports full colour 
+
+ESP8266 Display Retimer. WS2812B needs minimum of 24Mhz. EEPROM 
+
+8051 Boss of the Operation. Does all the compute in house and gives it to ESP for display retiming 
+
+<mark>0</mark> ~~<mark>3</mark>~~ <mark>0</mark> ~~<mark>3</mark>~~ 
+
+S <mark>oftware</mark> S <mark>oftware</mark> 
+
+Embedded C and C++ Embedded C and C++ 
+
+Timeline Timeline Se <mark>pt</mark> Oct Space Commander Tetris Snake Xenia 
+
+Nov 
+
+
+
+### SPACE COMMANDER - BLOCK DIAGRAM SPACE COMMANDER - BLOCK DIAGRAM 
+
+#### 1. INIT 
+
+#### 2. STEERING 
+
+3. COOLDOWN Decrement fire timer each tick; spawn bullet & reload cooldown only when fire=1 and timer==0. 
+
+4. BULLET PHYS Step active bullets up <mark>ward</mark> (y--) per frame; deactivate bullets exiting top edge (y < 0). 
+
+Reset ship X/Y, clear LED buffer, zero score & cooldown, seed PRNG, clear enemy & bullet arrays. 
+
+Poll 8-bit ADC0809 X-axis via AT89S52; map analog threshold to move ship left/right in bounds. 
+
+#### 8. HUD & RENDER 
+
+7. BULLET HIT Test active bullets vs enemy hitboxes; on overlap deactivate both, score++ & trigger flash. 
+
+#### 6. ENEMY HITBOX 
+
+#### 5. ENEMY SPAWN 
+
+Decrement spawn counter; at 0 spawn enemy at random X (y=0), set active=1 & reset interval. 
+
+Advance enemies down (y+ +); check enemy hitbox vs ship hitbox or bottom breach -> lose life. 
+
+Draw ship, bullets, enemies & score/lives HUD to buffer; stream frame to ESP8266 WS2812B. 
+
+### SNAKE XENIA - BLOCK DIAGRAM SNAKE XENIA - BLOCK DIAGRAM 
+
+1. MOVEMENT DIR Sample joystick X/Y ADC channels; update heading (U/D/L/R) while blocking 180-deg self-reversal. 
+
+6. LED RENDERING Write snake head, body, and A1/A2 pixels into buffer; stream frame to ESP8266 WS2812B driver. 
+
+2. COLLISION Compute next head (nx, ny); test wall bounds and self-body segments 1..len-1 -> Game Over on hit. 
+
+5. SPEED ADJUST Decrease loop tick delay as score and snake length increase, clamping at minimum frame interval. 
+
+3. EATING & GROW If head matches A1 or A2: score+ <mark>+,</mark> keep tail to grow length; else shift body array & clear tail. 
+
+4. FOOD A1 / A2 
+
+Spawn primary food A1 & bonus food A2 at random unoccupied cells (!= snake body) after eat/timer. 
+
+### TETRIS - BLOCK DIAGRAM TETRIS - BLOCK DIAGRAM 
+
+1. GAME LOOP 2. ROTATE & MOVE Superloop: poll ADC/buttons, tick Compute candidate (x+dx, y) or rotated gravity, process move/rotate, stamp & 4x4 matrix; test canPlace() vs walls & stream frame to ESP8266. locked cells first. 
+
+#### 6. SCORE & LEVEL 
+
+#### 5. LINE COLLAPSE 
+
+Scan board rows bottom-to-top; clear each full row, shift all upper rows down by 1 & count lines. 
+
+Award points by lines cleared (1-4 bonus), increment level/lines & tighten gravity_delay. 
+
+3. GRAVITY TIMING Increment tick counter each loop; <mark>when</mark> tick >= gravity_delay, attempt downward step (y+1) & reset. 
+
+#### 4. STAMPING 
+
+When !canPlace(x, y+1), stamp 4x4 piece into board grid, spawn next tetromino, check top-out. 
+
+
+
+
+
+2 <mark>mont</mark> h ~~s~~ 15days 2m <mark>onths 15d</mark> ays Time Spent <mark>Tim</mark> e Spent <mark>591</mark> 8 Bytes <mark>5918</mark> Bytes Of code in the Flash Of code in the Flash <mark>200</mark> / <mark>256 By</mark> tes <mark>200</mark> /2 <mark>56 B</mark> ytes RAM used RAM used 
+
+
+
+<mark>0</mark> ~~<mark>4</mark>~~ <mark>0</mark> ~~<mark>4</mark>~~ 
+
+Encount <mark>ered Pro</mark> blems Encount <mark>ered Pro</mark> blems Difficulties faced and how we overcame them Difficulties faced and how we overcame them 
+
+
+
+
+
+||Problems Faced<br>Problems Faced||
+|---|---|---|
+|Problem|Description|Time Taken|
+|ADC|28 Pin Multi Channel ADC was difficult to interface.<br>We had no cock source as NE555 was too noisy<br>for an ADC and the 1MHz clock from 8051 was too<br>high.|2 months|
+|UART|Finding a common BAUD rate which can satisfy<br>sampling and polling rates and at the same time<br>avoiding Bit Banging was also essential|3 weeks|
+|CLOCK|WS2812B news a minimum of 24 MHz Clock  but<br>the 8051 has a Clock speed of 11.082 MHz.<br>Frequency multipliers were out of question and we<br>had to resort to using a slave retimer|1 month|
+
+
+
+
+
+Project Images Project Images 4 ~~<u><mark>LO</mark></u>~~ | <mark>———</mark> |! <mark>DO e</mark> e <mark>ee</mark> <u><mark>QI, EEE</mark></u> hy 1 
+
+
+
+<!-- Start of picture text -->
+i<br>7 1? ieee |<br>Ss S a e<br><!-- End of picture text -->
+
+| ~~<u><mark>eel</mark></u>~~ <u><mark>ey</mark></u> <mark>Thank</mark> ~~<mark>You</mark> !~~ <mark>Thank You! 有り難う御座い</mark> ま <mark>有り難う御座い</mark> ま <mark>す ! す !</mark> ~~<mark>a</mark>~~ e <mark>y</mark> 
+
+
+
+
+
+<!-- Start of picture text -->
+on<br><!-- End of picture text -->
+
